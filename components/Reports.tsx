@@ -1,0 +1,265 @@
+
+import React, { useState, useRef } from 'react';
+import { ProjectData, SiteReport } from '../types';
+import { processVoiceReport } from '../services/geminiService';
+import { Mic, Square, Loader2, FileText, Check, X, AlertCircle, Plus } from 'lucide-react';
+
+interface ReportsProps {
+  data: ProjectData;
+  onAddReport: (report: SiteReport) => void;
+}
+
+const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [generatedReport, setGeneratedReport] = useState<Partial<SiteReport> | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startRecording = async () => {
+    try {
+      setError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const chunks: BlobPart[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async () => {
+          const base64Audio = (reader.result as string).split(',')[1];
+          await analyzeAudio(base64Audio);
+        };
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (err) {
+      console.error(err);
+      setError("دسترسی به میکروفون امکان‌پذیر نیست.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      setIsProcessing(true);
+    }
+  };
+
+  const analyzeAudio = async (base64Audio: string) => {
+    try {
+      const result = await processVoiceReport(base64Audio);
+      setGeneratedReport({
+        ...result,
+        id: Date.now().toString(),
+        status: 'pending'
+      });
+      setShowModal(true);
+    } catch (err) {
+      setError("خطا در پردازش صدا. لطفا دوباره تلاش کنید.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirm = () => {
+    if (generatedReport) {
+      onAddReport(generatedReport as SiteReport);
+      setShowModal(false);
+      setGeneratedReport(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800">مدیریت صورت وضعیت‌ها</h2>
+          <p className="text-slate-500 text-sm mt-1">ثبت گزارش کارکرد و هزینه‌ها به صورت صوتی یا دستی</p>
+        </div>
+      </div>
+
+      {/* Voice Input Section */}
+      <div className="bg-gradient-to-r from-emerald-700 to-teal-800 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+        <div className="relative z-10 flex flex-col items-center text-center">
+          <h3 className="text-xl font-bold mb-2">ثبت هوشمند صورت وضعیت</h3>
+          <p className="text-emerald-100 mb-6 max-w-md text-sm">
+            برای ثبت گزارش جدید، دکمه میکروفون را نگه دارید و شرح عملیات، هزینه‌ها و مقادیر مصرفی را دیکته کنید. هوش مصنوعی آن را تبدیل به صورت وضعیت می‌کند.
+          </p>
+          
+          <button
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isProcessing}
+            className={`
+              w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl
+              ${isRecording 
+                ? 'bg-red-500 scale-110 ring-4 ring-red-500/30 animate-pulse' 
+                : 'bg-white text-emerald-800 hover:scale-105'}
+              ${isProcessing ? 'opacity-80 cursor-wait' : ''}
+            `}
+          >
+            {isProcessing ? (
+              <Loader2 size={32} className="animate-spin" />
+            ) : isRecording ? (
+              <Square size={28} fill="currentColor" />
+            ) : (
+              <Mic size={32} />
+            )}
+          </button>
+          
+          <p className="mt-4 text-sm font-medium h-6">
+            {isRecording ? 'در حال ضبط... (برای پایان کلیک کنید)' : isProcessing ? 'در حال پردازش و استخراج اطلاعات...' : 'برای شروع صحبت کنید'}
+          </p>
+          
+          {error && (
+             <div className="mt-4 bg-red-500/20 text-red-100 px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+               <AlertCircle size={16} />
+               <span>{error}</span>
+             </div>
+          )}
+        </div>
+      </div>
+
+      {/* Reports List */}
+      <div className="grid grid-cols-1 gap-4">
+        {data.reports && data.reports.length > 0 ? (
+          data.reports.map((report) => (
+            <div key={report.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+                  <FileText size={24} />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-800">{report.title}</h4>
+                  <p className="text-sm text-slate-500 mt-1 line-clamp-1">{report.description}</p>
+                  <div className="flex gap-3 mt-2 text-xs text-slate-400">
+                    <span>{report.date}</span>
+                    <span>•</span>
+                    <span>{report.items?.length || 0} قلم کالا/خدمات</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-row md:flex-col items-end gap-2 w-full md:w-auto justify-between">
+                <span className="font-bold text-lg text-slate-800">
+                  {new Intl.NumberFormat('fa-IR').format(report.amount || 0)} <span className="text-xs text-slate-500 font-normal">تومان</span>
+                </span>
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  report.status === 'approved' ? 'bg-green-100 text-green-700' :
+                  report.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                  'bg-yellow-100 text-yellow-700'
+                }`}>
+                  {report.status === 'approved' ? 'تایید شده' :
+                   report.status === 'rejected' ? 'رد شده' : 'در انتظار بررسی'}
+                </span>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <FileText size={48} className="mx-auto mb-4 opacity-50" />
+            <p>هنوز صورت وضعیتی ثبت نشده است.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Confirmation Modal */}
+      {showModal && generatedReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800">تایید اطلاعات استخراج شده</h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">عنوان گزارش</label>
+                <input 
+                  type="text" 
+                  value={generatedReport.title || ''} 
+                  onChange={(e) => setGeneratedReport({...generatedReport, title: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              
+              <div>
+                <label className="text-xs text-slate-500 block mb-1">شرح عملیات</label>
+                <textarea 
+                  value={generatedReport.description || ''} 
+                  onChange={(e) => setGeneratedReport({...generatedReport, description: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm h-24 focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                   <label className="text-xs text-slate-500 block mb-1">مبلغ (تومان)</label>
+                   <input 
+                    type="number" 
+                    value={generatedReport.amount || 0} 
+                    onChange={(e) => setGeneratedReport({...generatedReport, amount: Number(e.target.value)})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono dir-ltr focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                   <label className="text-xs text-slate-500 block mb-1">تاریخ</label>
+                   <input 
+                    type="text" 
+                    value={generatedReport.date || ''} 
+                    onChange={(e) => setGeneratedReport({...generatedReport, date: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-center focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              {generatedReport.items && generatedReport.items.length > 0 && (
+                <div className="bg-slate-50 p-3 rounded-lg">
+                  <p className="text-xs font-bold text-slate-600 mb-2">ریز اقلام شناسایی شده:</p>
+                  <ul className="space-y-1 text-xs text-slate-600">
+                    {generatedReport.items.map((item, i) => (
+                      <li key={i} className="flex justify-between border-b border-slate-200 last:border-0 pb-1 last:pb-0">
+                        <span>{item.description}</span>
+                        <span>{item.quantity} {item.unit}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 flex gap-3">
+              <button 
+                onClick={() => setShowModal(false)}
+                className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl transition"
+              >
+                انصراف
+              </button>
+              <button 
+                onClick={handleConfirm}
+                className="flex-1 py-3 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-900 shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2"
+              >
+                <Check size={18} />
+                تایید و ثبت
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Reports;
