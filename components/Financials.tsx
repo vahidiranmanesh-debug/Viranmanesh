@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { ProjectData, Transaction } from '../types';
-import { ArrowDownLeft, ArrowUpRight, Clock, FileText, Filter, Plus, X, Calendar, DollarSign } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Clock, FileText, Plus, X, Calendar, DollarSign, Users } from 'lucide-react';
 
 interface FinancialsProps {
   data: ProjectData;
@@ -11,6 +11,7 @@ interface FinancialsProps {
 const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
   const [filter, setFilter] = useState<'all' | 'deposit' | 'expense' | 'debt'>('all');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
+  const [selectedPartnerId, setSelectedPartnerId] = useState<string>('all');
   const [showModal, setShowModal] = useState(false);
   const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
     type: 'expense',
@@ -25,7 +26,10 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
     const startDateMatch = dateRange.start ? t.date >= dateRange.start : true;
     const endDateMatch = dateRange.end ? t.date <= dateRange.end : true;
 
-    return typeMatch && startDateMatch && endDateMatch;
+    // Filter by partner
+    const partnerMatch = selectedPartnerId === 'all' ? true : t.partnerId === selectedPartnerId;
+
+    return typeMatch && startDateMatch && endDateMatch && partnerMatch;
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -39,6 +43,7 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
       type: newTransaction.type as 'deposit' | 'expense' | 'debt',
       description: newTransaction.description || '',
       status: newTransaction.status as 'paid' | 'pending' | 'overdue',
+      partnerId: newTransaction.partnerId
     };
 
     onAddTransaction(transaction);
@@ -89,7 +94,13 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-gradient-to-br from-emerald-600 to-teal-800 p-6 rounded-2xl text-white shadow-lg shadow-emerald-200">
           <p className="text-emerald-100 text-sm mb-2">مجموع واریزی شرکا</p>
-          <h3 className="text-3xl font-bold">۵,۲۰۰ م‌ت</h3>
+          <h3 className="text-3xl font-bold">
+            {new Intl.NumberFormat('fa-IR').format(
+              data.transactions
+                .filter(t => t.type === 'deposit')
+                .reduce((acc, t) => acc + t.amount, 0) / 1000000
+            )} م‌ت
+          </h3>
           <div className="mt-4 flex items-center gap-2 text-xs text-emerald-100 bg-white/10 w-fit px-2 py-1 rounded">
             <span>+۱۲٪ افزایش نسبت به ماه قبل</span>
           </div>
@@ -97,17 +108,25 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
 
         <div className="bg-gradient-to-br from-red-500 to-rose-600 p-6 rounded-2xl text-white shadow-lg shadow-red-200">
           <p className="text-red-100 text-sm mb-2">مجموع مخارج پروژه</p>
-          <h3 className="text-3xl font-bold">۴,۸۵۰ م‌ت</h3>
+          <h3 className="text-3xl font-bold">
+            {new Intl.NumberFormat('fa-IR').format(data.totalSpent / 1000000)} م‌ت
+          </h3>
            <div className="mt-4 flex items-center gap-2 text-xs text-red-100 bg-white/10 w-fit px-2 py-1 rounded">
-            <span>۹۲٪ بودجه جذب شده</span>
+            <span>{(data.totalSpent / data.totalBudget * 100).toFixed(1)}٪ بودجه جذب شده</span>
           </div>
         </div>
 
         <div className="bg-gradient-to-br from-yellow-500 to-amber-600 p-6 rounded-2xl text-white shadow-lg shadow-yellow-200">
           <p className="text-yellow-50 text-sm mb-2">بدهی‌های جاری</p>
-          <h3 className="text-3xl font-bold">۳۵۰ م‌ت</h3>
+          <h3 className="text-3xl font-bold">
+            {new Intl.NumberFormat('fa-IR').format(
+              data.transactions
+                .filter(t => t.type === 'debt' && t.status !== 'paid')
+                .reduce((acc, t) => acc + t.amount, 0) / 1000000
+            )} م‌ت
+          </h3>
            <div className="mt-4 flex items-center gap-2 text-xs text-yellow-100 bg-white/10 w-fit px-2 py-1 rounded">
-            <span>۲ مورد سررسید گذشته</span>
+            <span>سررسید شده: ۲ مورد</span>
           </div>
         </div>
       </div>
@@ -115,8 +134,8 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
       {/* Transactions Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
         {/* Filter Header */}
-        <div className="p-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+        <div className="p-5 border-b border-slate-100 flex flex-col xl:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto pb-2 xl:pb-0 no-scrollbar">
             {(['all', 'deposit', 'expense', 'debt'] as const).map((t) => (
               <button
                 key={t}
@@ -135,26 +154,45 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
             ))}
           </div>
 
-          {/* Date Filter */}
-          <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
-             <div className="flex items-center gap-1 px-2 text-slate-400">
-               <Calendar size={16} />
-             </div>
-             <input 
-               type="text" 
-               placeholder="از تاریخ (۱۴۰۳/۰۱/۰۱)"
-               className="bg-transparent text-sm w-32 outline-none text-slate-700 placeholder:text-slate-400"
-               value={dateRange.start}
-               onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
-             />
-             <span className="text-slate-300">|</span>
-             <input 
-               type="text" 
-               placeholder="تا تاریخ"
-               className="bg-transparent text-sm w-32 outline-none text-slate-700 placeholder:text-slate-400"
-               value={dateRange.end}
-               onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
-             />
+          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+            {/* Partner Filter */}
+            <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+               <div className="flex items-center gap-1 px-2 text-slate-400">
+                 <Users size={16} />
+               </div>
+               <select 
+                 value={selectedPartnerId}
+                 onChange={(e) => setSelectedPartnerId(e.target.value)}
+                 className="bg-transparent text-sm w-36 outline-none text-slate-700 cursor-pointer p-1"
+               >
+                 <option value="all">همه اشخاص</option>
+                 {data.partners.map(p => (
+                   <option key={p.id} value={p.id}>{p.name}</option>
+                 ))}
+               </select>
+            </div>
+
+            {/* Date Filter */}
+            <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
+               <div className="flex items-center gap-1 px-2 text-slate-400">
+                 <Calendar size={16} />
+               </div>
+               <input 
+                 type="text" 
+                 placeholder="از تاریخ (۱۴۰۳/۰۱/۰۱)"
+                 className="bg-transparent text-sm w-32 outline-none text-slate-700 placeholder:text-slate-400"
+                 value={dateRange.start}
+                 onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+               />
+               <span className="text-slate-300">|</span>
+               <input 
+                 type="text" 
+                 placeholder="تا تاریخ"
+                 className="bg-transparent text-sm w-32 outline-none text-slate-700 placeholder:text-slate-400"
+                 value={dateRange.end}
+                 onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+               />
+            </div>
           </div>
         </div>
         
@@ -177,9 +215,16 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
                       <div className={`p-2 rounded-lg bg-slate-100`}>
                         {getIcon(t.type)}
                       </div>
-                      <span className="text-sm font-medium text-slate-700">
-                        {t.type === 'deposit' ? 'واریزی' : t.type === 'expense' ? 'هزینه' : 'بدهی'}
-                      </span>
+                      <div>
+                         <span className="text-sm font-medium text-slate-700 block">
+                          {t.type === 'deposit' ? 'واریزی' : t.type === 'expense' ? 'هزینه' : 'بدهی'}
+                        </span>
+                         {t.partnerId && (
+                           <span className="text-[10px] text-slate-400">
+                             {data.partners.find(p => p.id === t.partnerId)?.name}
+                           </span>
+                         )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600">{t.description}</td>
@@ -249,6 +294,22 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
                 </div>
               </div>
 
+              {newTransaction.type === 'deposit' && (
+                <div>
+                   <label className="text-xs font-bold text-slate-700 block mb-2">نام شریک / پرداخت کننده</label>
+                   <select 
+                     value={newTransaction.partnerId || ''}
+                     onChange={(e) => setNewTransaction({...newTransaction, partnerId: e.target.value})}
+                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                   >
+                     <option value="">انتخاب کنید...</option>
+                     {data.partners.map(p => (
+                       <option key={p.id} value={p.id}>{p.name}</option>
+                     ))}
+                   </select>
+                </div>
+              )}
+
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-2">شرح تراکنش</label>
                 <input 
@@ -295,7 +356,7 @@ const Financials: React.FC<FinancialsProps> = ({ data, onAddTransaction }) => {
                   انصراف
                 </button>
                 <button 
-                  type="submit"
+                  type="submit" 
                   className="flex-1 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition"
                 >
                   ثبت نهایی

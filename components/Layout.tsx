@@ -9,7 +9,9 @@ import {
   Menu,
   X,
   Package,
-  ShoppingCart
+  ShoppingCart,
+  Users,
+  Crown
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -25,6 +27,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, pend
   const menuItems = [
     { id: 'dashboard', label: 'داشبورد', icon: LayoutDashboard },
     { id: 'progress', label: 'پیشرفت پروژه', icon: HardHat },
+    { id: 'partners', label: 'مدیریت شرکا', icon: Users },
     { id: 'financials', label: 'امور مالی و واریزی‌ها', icon: Wallet },
     { id: 'reports', label: 'صورت وضعیت‌ها', icon: FileText },
     { id: 'inventory', label: 'مدیریت انبار', icon: Package },
@@ -92,7 +95,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, setActiveTab, pend
               و ا
             </div>
             <div>
-              <p className="text-sm font-medium">وحید ایرانمنش</p>
+              <p className="text-sm font-medium flex items-center gap-2">
+                وحید ایرانمنش
+                <Crown size={14} className="text-yellow-400" fill="currentColor" />
+              </p>
               <p className="text-xs text-emerald-300">مدیر پروژه</p>
             </div>
           </div>

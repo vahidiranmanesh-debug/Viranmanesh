@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { ProjectData, SiteReport } from '../types';
 import { processVoiceReport } from '../services/geminiService';
-import { Mic, Square, Loader2, FileText, Check, X, AlertCircle, Plus } from 'lucide-react';
+import { Mic, Square, Loader2, FileText, Check, X, AlertCircle, Plus, PenTool, Trash2, PlusCircle } from 'lucide-react';
 
 interface ReportsProps {
   data: ProjectData;
@@ -16,6 +16,9 @@ const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
   const [generatedReport, setGeneratedReport] = useState<Partial<SiteReport> | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // State for manual item entry inside the modal
+  const [newItem, setNewItem] = useState({ description: '', quantity: '', unit: '', unitPrice: '' });
 
   const startRecording = async () => {
     try {
@@ -72,21 +75,69 @@ const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
     }
   };
 
+  const handleManualEntry = () => {
+    setGeneratedReport({
+      id: Date.now().toString(),
+      title: '',
+      description: '',
+      amount: 0,
+      date: new Date().toLocaleDateString('fa-IR'),
+      status: 'pending',
+      items: []
+    });
+    setShowModal(true);
+  };
+
+  const handleAddItem = () => {
+    if (!newItem.description || !generatedReport) return;
+    
+    const itemToAdd = {
+      description: newItem.description,
+      quantity: Number(newItem.quantity) || 0,
+      unit: newItem.unit || 'عدد',
+      unitPrice: Number(newItem.unitPrice) || 0
+    };
+
+    setGeneratedReport({
+      ...generatedReport,
+      items: [...(generatedReport.items || []), itemToAdd]
+    });
+
+    setNewItem({ description: '', quantity: '', unit: '', unitPrice: '' });
+  };
+
+  const handleRemoveItem = (index: number) => {
+    if (!generatedReport || !generatedReport.items) return;
+    const updatedItems = [...generatedReport.items];
+    updatedItems.splice(index, 1);
+    setGeneratedReport({ ...generatedReport, items: updatedItems });
+  };
+
   const handleConfirm = () => {
-    if (generatedReport) {
+    if (generatedReport && generatedReport.title) {
       onAddReport(generatedReport as SiteReport);
       setShowModal(false);
       setGeneratedReport(null);
+      setNewItem({ description: '', quantity: '', unit: '', unitPrice: '' });
+    } else {
+      alert("لطفا عنوان گزارش را وارد کنید.");
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-800">مدیریت صورت وضعیت‌ها</h2>
           <p className="text-slate-500 text-sm mt-1">ثبت گزارش کارکرد و هزینه‌ها به صورت صوتی یا دستی</p>
         </div>
+        <button 
+          onClick={handleManualEntry}
+          className="bg-emerald-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-emerald-700 transition shadow-lg shadow-emerald-200"
+        >
+          <PenTool size={18} />
+          <span>ثبت گزارش دستی</span>
+        </button>
       </div>
 
       {/* Voice Input Section */}
@@ -173,40 +224,44 @@ const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
         )}
       </div>
 
-      {/* Confirmation Modal */}
+      {/* Confirmation / Manual Entry Modal */}
       {showModal && generatedReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden my-4">
             <div className="p-6 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-lg text-slate-800">تایید اطلاعات استخراج شده</h3>
+              <h3 className="font-bold text-lg text-slate-800">
+                {generatedReport.id ? 'ویرایش و تایید گزارش' : 'ثبت گزارش جدید'}
+              </h3>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={24} />
               </button>
             </div>
             
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">عنوان گزارش</label>
-                <input 
-                  type="text" 
-                  value={generatedReport.title || ''} 
-                  onChange={(e) => setGeneratedReport({...generatedReport, title: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-              
-              <div>
-                <label className="text-xs text-slate-500 block mb-1">شرح عملیات</label>
-                <textarea 
-                  value={generatedReport.description || ''} 
-                  onChange={(e) => setGeneratedReport({...generatedReport, description: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm h-24 focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
-                />
-              </div>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-2">عنوان گزارش</label>
+                  <input 
+                    type="text" 
+                    value={generatedReport.title || ''} 
+                    onChange={(e) => setGeneratedReport({...generatedReport, title: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    placeholder="مثال: بتن ریزی سقف دوم"
+                  />
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-2">شرح عملیات</label>
+                  <textarea 
+                    value={generatedReport.description || ''} 
+                    onChange={(e) => setGeneratedReport({...generatedReport, description: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm h-20 focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+                    placeholder="توضیحات تکمیلی..."
+                  />
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
                 <div>
-                   <label className="text-xs text-slate-500 block mb-1">مبلغ (تومان)</label>
+                   <label className="text-xs font-bold text-slate-700 block mb-2">مبلغ کل (تومان)</label>
                    <input 
                     type="number" 
                     value={generatedReport.amount || 0} 
@@ -215,7 +270,7 @@ const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
                   />
                 </div>
                 <div>
-                   <label className="text-xs text-slate-500 block mb-1">تاریخ</label>
+                   <label className="text-xs font-bold text-slate-700 block mb-2">تاریخ</label>
                    <input 
                     type="text" 
                     value={generatedReport.date || ''} 
@@ -225,25 +280,103 @@ const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
                 </div>
               </div>
 
-              {generatedReport.items && generatedReport.items.length > 0 && (
-                <div className="bg-slate-50 p-3 rounded-lg">
-                  <p className="text-xs font-bold text-slate-600 mb-2">ریز اقلام شناسایی شده:</p>
-                  <ul className="space-y-1 text-xs text-slate-600">
-                    {generatedReport.items.map((item, i) => (
-                      <li key={i} className="flex justify-between border-b border-slate-200 last:border-0 pb-1 last:pb-0">
-                        <span>{item.description}</span>
-                        <span>{item.quantity} {item.unit}</span>
-                      </li>
-                    ))}
-                  </ul>
+              {/* Items Section */}
+              <div className="border-t border-slate-100 pt-4">
+                <h4 className="font-bold text-slate-700 text-sm mb-3">ریز اقلام و خدمات</h4>
+                
+                {/* Add New Item Form */}
+                <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100 mb-4 grid grid-cols-12 gap-2 items-end">
+                   <div className="col-span-12 sm:col-span-4">
+                     <label className="text-[10px] text-slate-500 block mb-1">شرح کالا / خدمات</label>
+                     <input 
+                       type="text" 
+                       value={newItem.description}
+                       onChange={(e) => setNewItem({...newItem, description: e.target.value})}
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
+                       placeholder="مثال: سیمان"
+                     />
+                   </div>
+                   <div className="col-span-4 sm:col-span-2">
+                     <label className="text-[10px] text-slate-500 block mb-1">تعداد</label>
+                     <input 
+                       type="number" 
+                       value={newItem.quantity}
+                       onChange={(e) => setNewItem({...newItem, quantity: e.target.value})}
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
+                     />
+                   </div>
+                   <div className="col-span-4 sm:col-span-2">
+                     <label className="text-[10px] text-slate-500 block mb-1">واحد</label>
+                     <input 
+                       type="text" 
+                       value={newItem.unit}
+                       onChange={(e) => setNewItem({...newItem, unit: e.target.value})}
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
+                       placeholder="کیسه"
+                     />
+                   </div>
+                   <div className="col-span-4 sm:col-span-3">
+                     <label className="text-[10px] text-slate-500 block mb-1">قیمت واحد</label>
+                     <input 
+                       type="number" 
+                       value={newItem.unitPrice}
+                       onChange={(e) => setNewItem({...newItem, unitPrice: e.target.value})}
+                       className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none"
+                     />
+                   </div>
+                   <div className="col-span-12 sm:col-span-1">
+                     <button 
+                       onClick={handleAddItem}
+                       className="w-full h-[30px] bg-emerald-600 text-white rounded-lg flex items-center justify-center hover:bg-emerald-700 transition"
+                     >
+                       <PlusCircle size={18} />
+                     </button>
+                   </div>
                 </div>
-              )}
+
+                {/* Items List */}
+                {generatedReport.items && generatedReport.items.length > 0 ? (
+                  <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-100 text-slate-500 font-medium">
+                        <tr>
+                          <th className="px-3 py-2">شرح</th>
+                          <th className="px-3 py-2">تعداد</th>
+                          <th className="px-3 py-2">واحد</th>
+                          <th className="px-3 py-2">قیمت واحد</th>
+                          <th className="px-3 py-2 w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {generatedReport.items.map((item, i) => (
+                          <tr key={i} className="hover:bg-white">
+                            <td className="px-3 py-2 text-slate-700">{item.description}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.quantity}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.unit}</td>
+                            <td className="px-3 py-2 text-slate-600">{new Intl.NumberFormat('fa-IR').format(item.unitPrice || 0)}</td>
+                            <td className="px-3 py-2 text-center">
+                              <button 
+                                onClick={() => handleRemoveItem(i)}
+                                className="text-red-400 hover:text-red-600 transition"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-center text-xs text-slate-400 py-2">هیچ قلمی اضافه نشده است.</p>
+                )}
+              </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex gap-3">
+            <div className="p-4 border-t border-slate-100 flex gap-3 bg-slate-50">
               <button 
                 onClick={() => setShowModal(false)}
-                className="flex-1 py-3 text-slate-600 font-medium hover:bg-slate-50 rounded-xl transition"
+                className="flex-1 py-3 text-slate-600 font-medium hover:bg-white border border-transparent hover:border-slate-200 rounded-xl transition"
               >
                 انصراف
               </button>
@@ -252,7 +385,7 @@ const Reports: React.FC<ReportsProps> = ({ data, onAddReport }) => {
                 className="flex-1 py-3 bg-emerald-800 text-white font-bold rounded-xl hover:bg-emerald-900 shadow-lg shadow-emerald-200 transition flex items-center justify-center gap-2"
               >
                 <Check size={18} />
-                تایید و ثبت
+                تایید و ثبت نهایی
               </button>
             </div>
           </div>

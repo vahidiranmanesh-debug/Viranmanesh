@@ -8,7 +8,8 @@ import AIAssistant from './components/AIAssistant';
 import Reports from './components/Reports';
 import Inventory from './components/Inventory';
 import PurchaseRequests from './components/PurchaseRequests';
-import { ProjectData, ProjectStatus, SiteReport, PurchaseRequest, Transaction } from './types';
+import Partners from './components/Partners';
+import { ProjectData, ProjectStatus, SiteReport, PurchaseRequest, Transaction, Partner } from './types';
 
 // Mock Data
 const MOCK_PROJECT: ProjectData = {
@@ -22,8 +23,8 @@ const MOCK_PROJECT: ProjectData = {
   startDate: '1402/09/01',
   estimatedEndDate: '1404/06/30',
   partners: [
-    { name: 'علی رضایی', role: 'مالک زمین', share: 60 },
-    { name: 'هلدینگ وحید ایرانمنش', role: 'سازنده', share: 40 }
+    { id: 'p1', name: 'علی رضایی', role: 'مالک زمین', share: 60, phoneNumber: '09121112233', joinDate: '1402/09/01' },
+    { id: 'p2', name: 'هلدینگ وحید ایرانمنش', role: 'سازنده', share: 40, phoneNumber: '02122334455', joinDate: '1402/09/01' }
   ],
   stages: [
     { name: 'گرفتن پروانه و مجوز', percentage: 100, status: 'completed', endDate: '1402/09/15' },
@@ -59,11 +60,11 @@ const MOCK_PROJECT: ProjectData = {
     { name: 'نصب روشنایی', percentage: 0, status: 'pending' },
   ],
   transactions: [
-    { id: '1', date: '1403/02/10', amount: 500000000, type: 'deposit', description: 'واریزی مرحله دوم سازنده', status: 'paid' },
+    { id: '1', date: '1403/02/10', amount: 500000000, type: 'deposit', description: 'واریزی مرحله دوم سازنده', status: 'paid', partnerId: 'p2' },
     { id: '2', date: '1403/02/08', amount: 320000000, type: 'expense', description: 'خرید میلگرد سایز ۱۸', status: 'paid' },
     { id: '3', date: '1403/02/05', amount: 150000000, type: 'expense', description: 'اجاره تاور کرین (ماهانه)', status: 'paid' },
     { id: '4', date: '1403/02/01', amount: 45000000, type: 'debt', description: 'بدهی پیمانکار بتن‌ریزی', status: 'overdue' },
-    { id: '5', date: '1403/01/25', amount: 200000000, type: 'deposit', description: 'تزریق نقدینگی مالک', status: 'paid' },
+    { id: '5', date: '1403/01/25', amount: 200000000, type: 'deposit', description: 'تزریق نقدینگی مالک', status: 'paid', partnerId: 'p1' },
     { id: '6', date: '1403/01/20', amount: 120000000, type: 'expense', description: 'حقوق نگهبانی و کارگران', status: 'paid' },
   ],
   reports: [
@@ -148,12 +149,21 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleAddPartner = (partner: Partner) => {
+    setProjectData(prev => ({
+      ...prev,
+      partners: [...prev.partners, partner]
+    }));
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard data={projectData} />;
       case 'progress':
         return <ProjectProgress data={projectData} />;
+      case 'partners':
+        return <Partners data={projectData} onAddPartner={handleAddPartner} />;
       case 'financials':
         return (
           <Financials 
